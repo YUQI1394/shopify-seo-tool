@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Shopify URL 体检工具，快速生成店铺商品页的模拟 SEO 与性能报告。">
+  <title>Shopify URL 体检工具</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --panel: rgba(14, 28, 48, 0.82);
+      --panel-strong: #101f35;
+      --line: rgba(130, 167, 211, 0.18);
+      --text: #f3f8ff;
+      --muted: #8fa4be;
+      --primary: #4df0c8;
+      --primary-dark: #20c8a0;
+      --blue: #5a8cff;
+      --warning: #ffcb66;
+      --danger: #ff718a;
+      --shadow: 0 28px 80px rgba(0, 0, 0, 0.38);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--text);
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(90, 140, 255, 0.16), transparent 34%),
+        radial-gradient(circle at 85% 25%, rgba(77, 240, 200, 0.12), transparent 28%),
+        var(--bg);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.16;
+      background-image:
+        linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: linear-gradient(to bottom, black, transparent 75%);
+    }
+
+    .page {
+      position: relative;
+      width: min(100% - 32px, 980px);
+      margin: 0 auto;
+      padding: 72px 0 64px;
+    }
+
+    .hero { text-align: center; }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 18px;
+      padding: 7px 12px;
+      border: 1px solid rgba(77, 240, 200, 0.22);
+      border-radius: 999px;
+      color: var(--primary);
+      background: rgba(77, 240, 200, 0.07);
+      font-size: 13px;
+      letter-spacing: 0.08em;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 0 14px var(--primary);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(36px, 7vw, 64px);
+      line-height: 1.08;
+      letter-spacing: -0.045em;
+    }
+
+    h1 span {
+      color: transparent;
+      background: linear-gradient(100deg, var(--primary), #78a1ff);
+      background-clip: text;
+      -webkit-background-clip: text;
+    }
+
+    .subtitle {
+      max-width: 620px;
+      margin: 20px auto 34px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.75;
+    }
+
+    .scanner {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(8, 19, 34, 0.78);
+      box-shadow: var(--shadow), inset 0 1px rgba(255,255,255,.04);
+      backdrop-filter: blur(18px);
+    }
+
+    .input-row { display: flex; gap: 10px; }
+
+    input {
+      min-width: 0;
+      flex: 1;
+      height: 56px;
+      padding: 0 18px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      outline: none;
+      color: var(--text);
+      background: #0d1a2d;
+      font-size: 15px;
+      transition: .2s ease;
+    }
+
+    input::placeholder { color: #62758d; }
+    input:focus { border-color: rgba(77,240,200,.6); box-shadow: 0 0 0 4px rgba(77,240,200,.08); }
+
+    button {
+      height: 56px;
+      padding: 0 25px;
+      border: 0;
+      border-radius: 12px;
+      color: #04130f;
+      background: linear-gradient(135deg, var(--primary), #68d8ff);
+      font-size: 15px;
+      font-weight: 750;
+      cursor: pointer;
+      box-shadow: 0 10px 26px rgba(77,240,200,.18);
+      transition: transform .2s ease, filter .2s ease;
+    }
+
+    button:hover { transform: translateY(-2px); filter: brightness(1.07); }
+    button:disabled { cursor: wait; opacity: .7; transform: none; }
+
+    .hint {
+      margin: 11px 6px 2px;
+      color: #6f849e;
+      font-size: 12px;
+      text-align: left;
+    }
+
+    .error { color: var(--danger); }
+
+    .loading {
+      display: none;
+      margin-top: 28px;
+      padding: 26px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .loading.active { display: block; }
+
+    .loader {
+      width: 34px;
+      height: 34px;
+      margin: 0 auto 13px;
+      border: 3px solid rgba(77,240,200,.13);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .75s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .report {
+      display: none;
+      margin-top: 28px;
+      text-align: left;
+      animation: reveal .5s ease both;
+    }
+
+    .report.active { display: block; }
+
+    @keyframes reveal {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .report-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .report-head h2 { margin: 0 0 5px; font-size: 22px; }
+    .checked-url { max-width: 650px; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    .status { color: var(--primary); font-size: 13px; white-space: nowrap; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .card {
+      position: relative;
+      min-height: 155px;
+      padding: 19px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(145deg, rgba(18,36,60,.92), rgba(10,23,40,.92));
+    }
+
+    .card::after {
+      content: "";
+      position: absolute;
+      width: 90px;
+      height: 90px;
+      right: -35px;
+      bottom: -45px;
+      border-radius: 50%;
+      background: var(--accent, var(--primary));
+      opacity: .09;
+      filter: blur(4px);
+    }
+
+    .label { color: var(--muted); font-size: 13px; }
+    .value { margin: 13px 0 7px; font-size: 34px; font-weight: 760; letter-spacing: -.04em; }
+    .unit { margin-left: 3px; color: var(--muted); font-size: 14px; font-weight: 500; }
+    .detail { color: #adc0d5; font-size: 12px; }
+
+    .bar {
+      height: 5px;
+      margin-top: 16px;
+      overflow: hidden;
+      border-radius: 5px;
+      background: rgba(255,255,255,.07);
+    }
+
+    .bar span {
+      display: block;
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent, var(--primary));
+      transition: width .8s .25s ease;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .summary-box {
+      padding: 18px 20px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: rgba(12, 26, 44, .72);
+    }
+
+    .summary-box h3 { margin: 0 0 12px; font-size: 14px; }
+    .summary-box ul { margin: 0; padding: 0; list-style: none; }
+    .summary-box li { position: relative; margin: 9px 0; padding-left: 18px; color: #9eb2c9; font-size: 13px; line-height: 1.55; }
+    .summary-box li::before { content: "✓"; position: absolute; left: 0; color: var(--primary); }
+    .summary-box.warning li::before { content: "!"; color: var(--warning); font-weight: 800; }
+
+    footer { margin-top: 34px; color: #50657f; font-size: 12px; text-align: center; }
+
+    @media (max-width: 760px) {
+      .page { padding-top: 46px; }
+      .cards { grid-template-columns: 1fr 1fr; }
+      .summary { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 520px) {
+      .input-row { flex-direction: column; }
+      button { width: 100%; }
+      .cards { grid-template-columns: 1fr; }
+      .report-head { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">SHOPIFY STORE INSPECTOR</div>
+      <h1>Shopify URL <span>体检工具</span></h1>
+      <p class="subtitle">粘贴商品页面链接，一键生成 SEO、性能与页面结构模拟分析报告，快速发现影响转化率的潜在问题。</p>
+
+      <div class="scanner">
+        <div class="input-row">
+          <input id="urlInput" type="url" inputmode="url" autocomplete="url" placeholder="https://your-store.myshopify.com/products/example" aria-label="Shopify 商品链接">
+          <button id="checkBtn" type="button">开始检查</button>
+        </div>
+        <p id="hint" class="hint">支持 myshopify.com 或使用 Shopify 搭建的独立域名商品页</p>
+      </div>
+
+      <div id="loading" class="loading" aria-live="polite">
+        <div class="loader"></div>
+        正在分析页面结构与性能指标…
+      </div>
+
+      <section id="report" class="report" aria-live="polite">
+        <div class="report-head">
+          <div>
+            <h2>体检报告</h2>
+            <div id="checkedUrl" class="checked-url"></div>
+          </div>
+          <div class="status">● 检查完成</div>
+        </div>
+
+        <div class="cards">
+          <article class="card" style="--accent: var(--primary)">
+            <div class="label">SEO 评分</div>
+            <div class="value"><span id="seoScore">--</span><span class="unit">/ 100</span></div>
+            <div id="seoDetail" class="detail">表现良好</div>
+            <div class="bar"><span id="seoBar"></span></div>
+          </article>
+          <article class="card" style="--accent: var(--blue)">
+            <div class="label">页面速度</div>
+            <div class="value"><span id="speed">--</span><span class="unit">秒</span></div>
+            <div class="detail">首屏模拟加载时间</div>
+            <div class="bar"><span id="speedBar"></span></div>
+          </article>
+          <article class="card" style="--accent: var(--warning)">
+            <div class="label">标题标签</div>
+            <div class="value"><span id="titleLength">--</span><span class="unit">字</span></div>
+            <div id="titleDetail" class="detail">建议控制在 30–60 字</div>
+            <div class="bar"><span id="titleBar"></span></div>
+          </article>
+          <article class="card" style="--accent: #b58cff">
+            <div class="label">移动端体验</div>
+            <div class="value"><span id="mobileScore">--</span><span class="unit">/ 100</span></div>
+            <div class="detail">响应式与可用性</div>
+            <div class="bar"><span id="mobileBar"></span></div>
+          </article>
+        </div>
+
+        <div class="summary">
+          <div class="summary-box">
+            <h3>检测通过</h3>
+            <ul>
+              <li>页面已启用 HTTPS 安全连接</li>
+              <li>商品页包含规范化链接标签</li>
+              <li>页面具备移动端响应式布局</li>
+            </ul>
+          </div>
+          <div class="summary-box warning">
+            <h3>优化建议</h3>
+            <ul>
+              <li>压缩商品主图，建议单张控制在 200KB 内</li>
+              <li>补充更具吸引力的 Meta Description</li>
+              <li>减少首屏非必要的第三方脚本</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </section>
+    <footer>本工具展示模拟检测结果，不会抓取或存储您的店铺数据。</footer>
+  </main>
+
+  <script>
+    const input = document.getElementById('urlInput');
+    const button = document.getElementById('checkBtn');
+    const hint = document.getElementById('hint');
+    const loading = document.getElementById('loading');
+    const report = document.getElementById('report');
+
+    function seededNumber(text, min, max) {
+      let hash = 0;
+      for (let i = 0; i < text.length; i++) hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+      return min + (Math.abs(hash) % (max - min + 1));
+    }
+
+    function validateUrl(value) {
+      try {
+        const url = new URL(value);
+        return ['http:', 'https:'].includes(url.protocol) && url.hostname.includes('.');
+      } catch { return false; }
+    }
+
+    function setMetric(id, value) {
+      document.getElementById(id).textContent = value;
+    }
+
+    function runCheck() {
+      const value = input.value.trim();
+      hint.classList.remove('error');
+
+      if (!validateUrl(value)) {
+        hint.textContent = '请输入有效的完整链接，例如：https://store.com/products/example';
+        hint.classList.add('error');
+        input.focus();
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = '检查中…';
+      report.classList.remove('active');
+      loading.classList.add('active');
+      hint.textContent = '正在建立安全分析会话';
+
+      setTimeout(() => {
+        const seo = seededNumber(value, 76, 94);
+        const speedTenths = seededNumber(value + 'speed', 12, 34);
+        const speed = (speedTenths / 10).toFixed(1);
+        const title = seededNumber(value + 'title', 32, 66);
+        const mobile = seededNumber(value + 'mobile', 79, 96);
+
+        setMetric('seoScore', seo);
+        setMetric('speed', speed);
+        setMetric('titleLength', title);
+        setMetric('mobileScore', mobile);
+        document.getElementById('seoDetail').textContent = seo >= 88 ? '表现优秀' : '表现良好';
+        document.getElementById('titleDetail').textContent = title <= 60 ? '长度符合建议范围' : '标题略长，建议精简';
+        document.getElementById('checkedUrl').textContent = value;
+
+        loading.classList.remove('active');
+        report.classList.add('active');
+        button.disabled = false;
+        button.textContent = '重新检查';
+        hint.textContent = '报告已生成 · 数据为前端模拟结果';
+
+        requestAnimationFrame(() => {
+          document.getElementById('seoBar').style.width = seo + '%';
+          document.getElementById('speedBar').style.width = Math.max(30, 105 - speedTenths * 2) + '%';
+          document.getElementById('titleBar').style.width = Math.min(100, title / 60 * 100) + '%';
+          document.getElementById('mobileBar').style.width = mobile + '%';
+        });
+      }, 1350);
+    }
+
+    button.addEventListener('click', runCheck);
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') runCheck();
+    });
+  </script>
+</body>
+</html>
